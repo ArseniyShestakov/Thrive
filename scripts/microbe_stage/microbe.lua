@@ -29,6 +29,7 @@ function MicrobeComponent:__init(isPlayerMicrobe)
     self.specialStorageOrganelles = {} -- Organelles with complete resonsiblity for a specific compound (such as agentvacuoles)
     self.movementDirection = Vector3(0, 0, 0)
     self.facingTargetPoint = Vector3(0, 0, 0)
+    self.movementFactor = 1.0 -- Multiplied on the movement speed of the microbe.
     self.capacity = 0  -- The amount that can be stored in the microbe. NOTE: This does not include special storage organelles
     self.stored = 0 -- The amount stored in the microbe. NOTE: This does not include special storage organelles
     self.compounds = {}
@@ -42,6 +43,7 @@ function MicrobeComponent:__init(isPlayerMicrobe)
     self.maxBandwidth = 0
     self.remainingBandwidth = 0
     self.compoundCollectionTimer = EXCESS_COMPOUND_COLLECTION_INTERVAL
+    self.isEngulfing = false
 end
 
 function MicrobeComponent:_resetCompoundPriorities()
@@ -715,6 +717,20 @@ function Microbe:reproduce()
     end
 end
 
+-- Disables or enabled engulfmode for a microbe, allowing or disallowed it to absorb other microbes
+function Microbe:toggleEngulfMode()
+    if self.microbe.engulfMode then
+        
+        print("disabliong engul")
+        self.microbe.movementFactor = self.microbe.movementFactor * 3
+    else
+    print("enbalbing engul")
+        self.microbe.movementFactor = self.microbe.movementFactor / 3
+    end
+    self.microbe.engulfMode = not self.microbe.engulfMode
+end
+
+
 
 -- Updates the microbe's state
 function Microbe:update(logicTime)
@@ -957,10 +973,24 @@ function MicrobeSystem:update(renderTime, logicTime)
             microbe.rigidBody.dynamicProperties.linearVelocity:length()
             local body1 = entity1:getComponent(RigidBodyComponent.TYPE_ID)
             local body2 = entity2:getComponent(RigidBodyComponent.TYPE_ID)
+            local microbe1Comp = entity1:getComponent(MicrobeComponent.TYPE_ID)
+            local microbe2Comp = entity2:getComponent(MicrobeComponent.TYPE_ID)
             if body1~=nil and body2~=nil then
                 if ((body1.dynamicProperties.linearVelocity - body2.dynamicProperties.linearVelocity):length()) > RELATIVE_VELOCITY_TO_BUMP_SOUND then
                     local soundComponent = entity1:getComponent(SoundSourceComponent.TYPE_ID)
                     soundComponent:playSound("microbe-collision")
+                end
+                
+                -- For now I'm not really considering the case of both absorbing eachother
+                if microbe1Comp.engulfMode and microbe1Comp.maxHitpoints > microbe2Comp.maxHitpoints then
+                    microbe2Comp.movementFactor = microbe2Comp.movementFactor / 8
+                    body1:addCollisionFlag(RigidBodyComponent.COL_EATER)
+                    body2:addCollisionFlag(RigidBodyComponent.COL_EATEN)
+                end
+                if microbe2Comp.engulfMode and microbe2Comp.maxHitpoints > microbe1Comp.maxHitpoints then
+                    microbe1Comp.movementFactor = microbe2Comp.movementFactor / 8
+                    body2:addCollisionFlag(RigidBodyComponent.COL_EATER)
+                    body1:addCollisionFlag(RigidBodyComponent.COL_EATEN)
                 end
             end
         end

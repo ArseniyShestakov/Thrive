@@ -19,6 +19,8 @@ class scope;
 
 namespace thrive {
 
+
+
 /**
 * @brief A component for a rigid body
 */
@@ -27,6 +29,10 @@ class RigidBodyComponent : public Component, public btMotionState {
 
 public:
 
+    enum CollisionFlags {
+        COL_EATEN = 0x1,      // Does not collide with eaters
+        COL_EATER = 0x2  // Does not collide with eaten
+    };
 
     /**
     * @brief Properties
@@ -145,6 +151,13 @@ public:
     *   - Properties::hasContactResponse
     *   - Properties::kinematic
     *
+    * - applyImpulse
+    * - applyCentralImpulse
+    * - applyTorque
+    * - Clearforces
+    * - addCollisionFlag
+    * - removeCollisionFlag
+    * - (missing)
     * @return
     */
     static luabind::scope
@@ -207,6 +220,32 @@ public:
     */
     void
     clearForces();
+
+    /**
+    * @brief Adds a collision flag to the rigidbody
+    *  This can be used to filter out collisions;
+    *  See rigidbodyinputsystem::init
+    *
+    * @param flag
+    *   Flag to add
+    */
+    void
+    addCollisionFlag(
+        int flag
+    );
+
+    /**
+    * @brief Removes a collision flag to the rigidbody
+    *  This can be used to filter out collisions;
+    *  See rigidbodyinputsystem::init
+    *
+    * @param flag
+    *   Flag to remove
+    */
+    void
+    removeCollisionFlag(
+        int flag
+    );
 
     /**
     * @brief Reimplemented from btMotionState
@@ -319,6 +358,7 @@ private:
     friend class RigidBodyInputSystem;
 
     bool m_toClearForces = false;
+    TouchableValue<int> collisionFlags;
 
 };
 

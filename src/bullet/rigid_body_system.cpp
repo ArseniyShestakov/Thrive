@@ -65,6 +65,22 @@ RigidBodyComponent::clearForces(){
     m_toClearForces = true;
 }
 
+void
+RigidBodyComponent::addCollisionFlag(
+    int flag
+) {
+    collisionFlags = collisionFlags.get() | flag;
+    collisionFlags.touch();
+}
+
+void
+RigidBodyComponent::removeCollisionFlag(
+    int flag
+) {
+    collisionFlags = collisionFlags.get() & ~flag;
+    collisionFlags.touch();
+}
+
 
 luabind::scope
 RigidBodyComponent::luaBindings() {
@@ -72,6 +88,10 @@ RigidBodyComponent::luaBindings() {
     return class_<RigidBodyComponent, Component>("RigidBodyComponent")
         .enum_("ID") [
             value("TYPE_ID", RigidBodyComponent::TYPE_ID)
+        ]
+        .enum_("COL_EATER") [
+            value("COL_EATER", RigidBodyComponent::COL_EATER),
+            value("COL_EATEN", RigidBodyComponent::COL_EATEN)
         ]
         .scope [
             def("TYPE_NAME", &RigidBodyComponent::TYPE_NAME),
@@ -99,6 +119,8 @@ RigidBodyComponent::luaBindings() {
         .def("applyCentralImpulse", &RigidBodyComponent::applyCentralImpulse)
         .def("applyTorque", &RigidBodyComponent::applyTorque)
         .def("clearForces", &RigidBodyComponent::clearForces)
+        .def("addCollisionFlag", &RigidBodyComponent::addCollisionFlag)
+        .def("removeCollisionFlag", &RigidBodyComponent::removeCollisionFlag)
         .def_readonly("properties", &RigidBodyComponent::m_properties)
         .def_readonly("dynamicProperties", &RigidBodyComponent::m_dynamicProperties)
         .def_readwrite("pushbackEntity", &RigidBodyComponent::m_pushbackEntity)
@@ -216,6 +238,22 @@ RigidBodyInputSystem::RigidBodyInputSystem()
 RigidBodyInputSystem::~RigidBodyInputSystem() {}
 
 
+struct CollisionFilterCallback : public btOverlapFilterCallback
+{
+    // return true when pairs need collision
+    virtual bool needBroadphaseCollision(
+        btBroadphaseProxy* proxy0,
+        btBroadphaseProxy* proxy1
+    ) const {
+        //Eaters don't collide with eatens
+        return not ((proxy0->m_collisionFilterGroup & RigidBodyComponent::CollisionFlags::COL_EATEN) != 0 and
+                    (proxy1->m_collisionFilterGroup & RigidBodyComponent::CollisionFlags::COL_EATER) != 0)
+                    or
+                   ((proxy1->m_collisionFilterGroup & RigidBodyComponent::CollisionFlags::COL_EATEN) != 0 and
+                    (proxy0->m_collisionFilterGroup & RigidBodyComponent::CollisionFlags::COL_EATER) != 0);
+    }
+};
+
 void
 RigidBodyInputSystem::init(
     GameState* gameState
@@ -224,6 +262,9 @@ RigidBodyInputSystem::init(
     assert(m_impl->m_world == nullptr && "Double init of system");
     m_impl->m_world = gameState->physicsWorld();
     m_impl->m_entities.setEntityManager(&gameState->entityManager());
+
+    btOverlapFilterCallback * filterCallback = new CollisionFilterCallback();
+    m_impl->m_world->getPairCache()->setOverlapFilterCallback(filterCallback);
 }
 
 
@@ -388,6 +429,10 @@ RigidBodyInputSystem::update(int, int logicTime) {
                 }
             }
             rigidBodyComponent->m_pushbackEntity = NULL_ENTITY;
+        }
+        if (rigidBodyComponent->collisionFlags.hasChanges()) {
+            body->setFlags(rigidBodyComponent->collisionFlags.get());
+            rigidBodyComponent->collisionFlags.untouch();
         }
         body->applyDamping(logicTime / 1000.0f);
     }
